@@ -2,7 +2,13 @@
   <div class="page-container">
     <div class="page-header">
       <h2>角色管理</h2>
-      <el-button type="primary" icon="Plus" @click="handleAdd">新增角色</el-button>
+    </div>
+
+    <div class="search-toolbar">
+      <div class="toolbar-left"></div>
+      <div class="toolbar-right">
+        <el-button type="primary" icon="Plus" @click="handleAdd">新增角色</el-button>
+      </div>
     </div>
 
     <el-table :data="tableData" v-loading="loading" border stripe>
@@ -12,7 +18,7 @@
       <el-table-column prop="description" label="描述" min-width="200" />
       <el-table-column prop="status" label="状态" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '启用' : '禁用' }}</el-tag>
+          <el-switch v-model="row.status" :active-value="1" :inactive-value="0" @change="(val) => handleStatusChange(row, val)" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="220" fixed="right">
@@ -110,6 +116,16 @@ const handleDelete = async (row) => {
 const resetForm = () => {
   formRef.value?.resetFields()
   Object.assign(form, { roleId: '', roleName: '', roleCode: '', description: '', status: 1 })
+}
+
+const handleStatusChange = async (row, val) => {
+  try {
+    await updateRole({ roleId: row.roleId, status: val })
+    ElMessage.success(val === 1 ? '已启用' : '已禁用')
+    loadData()
+  } catch {
+    ElMessage.error('操作失败')
+  }
 }
 
 const handleSubmit = async () => {

@@ -5,18 +5,20 @@
     </div>
 
     <div class="search-toolbar">
-      <el-input v-model="searchForm.personName" placeholder="姓名" clearable style="width:160px" @change="handleSearch" />
-      <el-select v-model="searchForm.communityId" placeholder="选择小区" clearable style="width:160px" @change="handleSearch">
-        <el-option v-for="c in communityList" :key="c.communityId" :label="c.name" :value="c.communityId" />
-      </el-select>
-      <el-select v-model="searchForm.type" placeholder="出入类型" clearable style="width:130px" @change="handleSearch">
-        <el-option label="进入" :value="1" />
-        <el-option label="外出" :value="2" />
-      </el-select>
-      <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期"
-        end-placeholder="结束日期" value-format="YYYY-MM-DD" @change="handleDateChange" style="width:260px" />
-      <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
-      <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      <div class="toolbar-left">
+        <el-input v-model="searchForm.personName" placeholder="姓名" clearable style="width:160px" @change="handleSearch" />
+        <el-select v-model="searchForm.communityId" placeholder="选择小区" clearable style="width:160px" @change="handleSearch">
+          <el-option v-for="c in communityList" :key="c.communityId" :label="c.name" :value="c.communityId" />
+        </el-select>
+        <el-select v-model="searchForm.type" placeholder="出入类型" clearable style="width:130px" @change="handleSearch">
+          <el-option label="进入" :value="1" />
+          <el-option label="外出" :value="2" />
+        </el-select>
+        <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期"
+          end-placeholder="结束日期" value-format="YYYY-MM-DD" @change="handleDateChange" style="width:260px" />
+        <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
+        <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      </div>
     </div>
 
     <el-table :data="tableData" v-loading="loading" border stripe style="width:100%">
@@ -32,6 +34,7 @@
           <el-tag v-if="row.verifyType===1" type="primary">人脸识别</el-tag>
           <el-tag v-else-if="row.verifyType===2" type="warning">门禁钥匙</el-tag>
           <el-tag v-else-if="row.verifyType===3" type="info">访客登记</el-tag>
+          <el-tag v-else-if="row.verifyType===4" type="success">车牌识别</el-tag>
           <el-tag v-else type="info">其他</el-tag>
         </template>
       </el-table-column>

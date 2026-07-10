@@ -5,9 +5,11 @@
     </div>
 
     <div class="search-toolbar">
-      <el-input v-model="searchForm.keyword" placeholder="用户名/模块" clearable style="width:220px" @change="handleSearch" />
-      <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
-      <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      <div class="toolbar-left">
+        <el-input v-model="searchForm.keyword" placeholder="用户名/模块" clearable style="width:220px" @change="handleSearch" />
+        <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
+        <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      </div>
     </div>
 
     <el-table :data="tableData" v-loading="loading" border stripe>

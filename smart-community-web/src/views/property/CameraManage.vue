@@ -2,16 +2,20 @@
   <div class="page-container">
     <div class="page-header">
       <h2>摄像头管理</h2>
-      <el-button type="primary" icon="Plus" @click="handleAdd">新增摄像头</el-button>
     </div>
 
     <div class="search-toolbar">
-      <el-input v-model="searchForm.keyword" placeholder="名称/位置" clearable style="width:220px" @change="handleSearch" />
-      <el-select v-model="searchForm.communityId" placeholder="选择小区" clearable style="width:160px" @change="handleSearch">
+      <div class="toolbar-left">
+        <el-input v-model="searchForm.keyword" placeholder="名称/位置" clearable style="width:220px" @change="handleSearch" />
+        <el-select v-model="searchForm.communityId" placeholder="选择小区" clearable style="width:160px" @change="handleSearch">
         <el-option v-for="c in communityList" :key="c.communityId" :label="c.name" :value="c.communityId" />
       </el-select>
       <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
       <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      </div>
+      <div class="toolbar-right">
+        <el-button type="primary" icon="Plus" @click="handleAdd">新增摄像头</el-button>
+      </div>
     </div>
 
     <el-table :data="tableData" v-loading="loading" border stripe style="width:100%">
@@ -30,7 +34,7 @@
       </el-table-column>
       <el-table-column prop="onlineStatus" label="在线状态" width="90">
         <template #default="{ row }">
-          <el-tag :type="row.onlineStatus===1?'success':'danger'">{{ row.onlineStatus===1?'在线':'离线' }}</el-tag>
+          <el-switch v-model="row.onlineStatus" :active-value="1" :inactive-value="0" @change="(val) => handleOnlineStatusChange(row, val)" />
         </template>
       </el-table-column>
       <el-table-column prop="status" label="状态" width="90">
@@ -158,6 +162,16 @@ const handleDelete = async (row) => {
 const resetForm = () => {
   formRef.value?.resetFields()
   Object.assign(form, { cameraId: '', communityId: null, name: '', deviceCode: '', ipAddress: '', location: '', streamUrl: '', deviceType: 1, onlineStatus: 1, status: 1 })
+}
+
+const handleOnlineStatusChange = async (row, val) => {
+  try {
+    await updateCamera({ cameraId: row.cameraId, onlineStatus: val })
+    ElMessage.success(val === 1 ? '已上线' : '已离线')
+    loadData()
+  } catch {
+    ElMessage.error('操作失败')
+  }
 }
 
 const handleSubmit = async () => {

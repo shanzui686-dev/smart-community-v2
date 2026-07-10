@@ -2,17 +2,21 @@
   <div class="page-container">
     <div class="page-header">
       <h2>用户管理</h2>
-      <el-button type="primary" icon="Plus" @click="handleAdd">新增用户</el-button>
     </div>
 
     <div class="search-toolbar">
-      <el-input v-model="searchForm.keyword" placeholder="用户名/姓名/手机号" clearable style="width:220px" @change="handleSearch" />
-      <el-select v-model="searchForm.status" placeholder="状态" clearable style="width:120px" @change="handleSearch">
+      <div class="toolbar-left">
+        <el-input v-model="searchForm.keyword" placeholder="用户名/姓名/手机号" clearable style="width:220px" @change="handleSearch" />
+        <el-select v-model="searchForm.status" placeholder="状态" clearable style="width:120px" @change="handleSearch">
         <el-option label="启用" :value="1" />
         <el-option label="禁用" :value="0" />
       </el-select>
       <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
       <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      </div>
+      <div class="toolbar-right">
+        <el-button type="primary" icon="Plus" @click="handleAdd">新增用户</el-button>
+      </div>
     </div>
 
     <el-table :data="tableData" v-loading="loading" border stripe>
@@ -28,7 +32,7 @@
       <el-table-column prop="email" label="邮箱" min-width="160" />
       <el-table-column prop="status" label="状态" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '启用' : '禁用' }}</el-tag>
+          <el-switch v-model="row.status" :active-value="1" :inactive-value="0" @change="(val) => handleStatusChange(row, val)" />
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="创建时间" width="170" />
@@ -248,6 +252,16 @@ const handlePwdSubmit = async () => {
 const resetForm = () => {
   formRef.value?.resetFields()
   Object.assign(form, { userId: '', username: '', password: '123456', realName: '', mobile: '', email: '', avatar: '', status: 1, roleIds: [] })
+}
+
+const handleStatusChange = async (row, val) => {
+  try {
+    await updateUser({ userId: row.userId, status: val })
+    ElMessage.success(val === 1 ? '已启用' : '已禁用')
+    loadData()
+  } catch {
+    ElMessage.error('操作失败')
+  }
 }
 
 const handleSubmit = async () => {

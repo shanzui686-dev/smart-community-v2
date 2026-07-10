@@ -1,7 +1,15 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2>人脸识别</h2>
+      <h2>门禁管理</h2>
+    </div>
+
+    <!-- 识别类型切换 -->
+    <div class="search-toolbar">
+      <el-radio-group v-model="recognitionType" size="large">
+        <el-radio-button label="face">人脸识别</el-radio-button>
+        <el-radio-button label="plate">车牌识别</el-radio-button>
+      </el-radio-group>
     </div>
 
     <!-- 摄像头选择 -->
@@ -21,7 +29,7 @@
     <el-row :gutter="20">
       <el-col :span="14">
         <el-card shadow="never">
-          <template #header><span>摄像头抓拍</span></template>
+          <template #header><span>{{ recognitionType === 'face' ? '摄像头抓拍' : '车牌抓拍' }}</span></template>
 
           <div v-if="!cameraOpen" class="camera-placeholder" @click="openCamera">
             <el-icon :size="60" color="#c0c4cc"><Camera /></el-icon>
@@ -35,7 +43,7 @@
               <el-button @click="closeCamera">关闭摄像头</el-button>
               <el-button type="primary" :icon="Camera" @click="takeSnapshot" :loading="capturing"
                 :disabled="!selectedCameraId">
-                抓拍并识别
+                {{ recognitionType === 'face' ? '抓拍并人脸识别' : '抓拍并车牌识别' }}
               </el-button>
             </div>
           </div>
@@ -44,7 +52,7 @@
 
       <el-col :span="10">
         <el-card shadow="never">
-          <template #header><span>识别结果</span></template>
+          <template #header><span>{{ recognitionType === 'face' ? '人脸识别结果' : '车牌识别结果' }}</span></template>
 
           <div v-if="!capturedImage && !identifying && !result" class="result-placeholder">
             <el-icon :size="50" color="#c0c4cc"><Search /></el-icon>
@@ -61,7 +69,7 @@
           </div>
 
           <div v-if="result" class="result-display">
-            <div v-if="result.matched" class="result-success">
+            <div v-if="recognitionType === 'face'" v-show="result.matched" class="result-success">
               <el-result icon="success" :title="`识别成功 — 本小区居民 (${cameraDirection===1?'进入':'外出'}, 置信度${result.score}%)`">
                 <template #sub-title>
                   <el-descriptions :column="1" border size="small">
@@ -78,8 +86,35 @@
               </el-result>
             </div>
 
-            <div v-else class="result-fail">
+            <div v-if="recognitionType === 'face'" v-show="!result.matched" class="result-fail">
               <el-result icon="warning" title="非本小区居民或置信度不足" sub-title="置信度需大于80%才视为本小区居民并生成出入记录" />
+            </div>
+
+            <div v-if="recognitionType === 'plate'" v-show="result.matched" class="result-success">
+              <el-result icon="success" :title="`车牌识别成功 — ${result.plateNumber} (${cameraDirection===1?'进入':'外出'})`">
+                <template #sub-title>
+                  <el-descriptions :column="1" border size="small">
+                    <el-descriptions-item label="车牌号">{{ result.plateNumber || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="车牌颜色">{{ result.color || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="车主姓名">{{ result.personName || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="手机号">{{ result.personMobile || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="门牌号">{{ result.personHouseNo || '-' }}</el-descriptions-item>
+                    <el-descriptions-item label="是否有车位">{{ result.hasParkingSpace === 1 ? '有' : '无' }}</el-descriptions-item>
+                    <el-descriptions-item label="摄像头">{{ selectedCameraName }}</el-descriptions-item>
+                    <el-descriptions-item label="出入记录">
+                      <el-tag :type="result.recorded?'success':'danger'">{{ result.recorded ? '已生成' : '未生成' }}</el-tag>
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </template>
+              </el-result>
+            </div>
+
+            <div v-if="recognitionType === 'plate'" v-show="!result.matched && result.plateNumber" class="result-fail">
+              <el-result icon="warning" :title="`车牌 ${result.plateNumber} 未登记`" sub-title="该车辆未在小区车辆管理中登记，无法识别" />
+            </div>
+
+            <div v-if="recognitionType === 'plate'" v-show="!result.plateNumber" class="result-fail">
+              <el-result icon="warning" title="车牌识别失败" sub-title="未能识别出车牌号，请调整角度重新拍摄" />
             </div>
 
             <div style="text-align:center;margin-top:16px">
@@ -94,7 +129,7 @@
     <el-row :gutter="20" style="margin-top:20px">
       <el-col :span="24">
         <el-card shadow="never">
-          <template #header><span>手动上传识别</span></template>
+          <template #header><span>{{ recognitionType === 'face' ? '手动上传识别' : '手动上传车牌识别' }}</span></template>
           <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
             <el-upload :show-file-list="false" :http-request="handleManualUpload" accept="image/*">
               <el-button :icon="Upload">选择照片</el-button>
@@ -102,16 +137,22 @@
             <span v-if="manualImage" style="color:#409eff">已选择照片</span>
             <el-button v-if="manualImage" type="primary" @click="handleManualSearch" :loading="manualSearching"
               :disabled="!selectedCameraId">
-              开始识别
+              {{ recognitionType === 'face' ? '开始人脸识别' : '开始车牌识别' }}
             </el-button>
           </div>
           <div v-if="manualResult" style="margin-top:12px">
             <el-alert
-              v-if="manualResult.matched"
+              v-if="manualResult.matched && recognitionType === 'face'"
               :title="`匹配成功：${manualResult.personName || '居民'} (置信度 ${manualResult.score}%) — 已记录${cameraDirection===1?'进入':'外出'}`"
               type="success" :closable="false" show-icon
             />
-            <el-alert v-else title="未匹配到居民" type="warning" :closable="false" show-icon />
+            <el-alert
+              v-if="manualResult.matched && recognitionType === 'plate'"
+              :title="`匹配成功：${manualResult.plateNumber} — ${manualResult.personName || '车主'} — 已记录${cameraDirection===1?'进入':'外出'}`"
+              type="success" :closable="false" show-icon
+            />
+            <el-alert v-if="!manualResult.matched && recognitionType === 'face'" title="未匹配到居民" type="warning" :closable="false" show-icon />
+            <el-alert v-if="!manualResult.matched && recognitionType === 'plate'" :title="`车牌 ${manualResult.plateNumber || '未知'} 未登记`" type="warning" :closable="false" show-icon />
           </div>
         </el-card>
       </el-col>
@@ -125,6 +166,9 @@ import { ElMessage } from 'element-plus'
 import { uploadFile } from '@/api/system'
 import { getCameras } from '@/api/property'
 import request from '@/utils/request'
+
+// ==================== 识别类型 ====================
+const recognitionType = ref('face')
 
 // ==================== 摄像头选择 ====================
 const doorCameras = ref([])
@@ -188,29 +232,52 @@ const takeSnapshot = async () => {
 
   try {
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9))
-    const file = new File([blob], 'face_snapshot.jpg', { type: 'image/jpeg' })
-    const url = await uploadImageToOss(file, 'face_capture')
+    const file = new File([blob], recognitionType.value === 'face' ? 'face_snapshot.jpg' : 'plate_snapshot.jpg', { type: 'image/jpeg' })
+    const url = await uploadImageToOss(file, recognitionType.value === 'face' ? 'face_capture' : 'plate_capture')
     if (!url) return
 
     capturedImage.value = url
     identifying.value = true
 
-    const searchData = await searchFace(url)
-    if (searchData && searchData.matched) {
-      const personInfo = await fetchPersonInfo(searchData.personId)
-      // 记录出入
-      let recorded = false
-      if (selectedCameraId.value && cameraDirection.value) {
-        recorded = await recordAccess(personInfo, url)
-      }
-      result.value = {
-        matched: true, personId: searchData.personId, score: searchData.score,
-        personName: personInfo?.userName || '-', personMobile: personInfo?.mobile || '-',
-        personHouseNo: personInfo?.houseNo || '-', personType: personInfo?.personTypeName || '-',
-        recorded
+    if (recognitionType.value === 'face') {
+      const searchData = await searchFace(url)
+      if (searchData && searchData.matched) {
+        const personInfo = await fetchPersonInfo(searchData.personId)
+        let recorded = false
+        if (selectedCameraId.value && cameraDirection.value) {
+          recorded = await recordAccess(personInfo, url)
+        }
+        result.value = {
+          matched: true, personId: searchData.personId, score: searchData.score,
+          personName: personInfo?.userName || '-', personMobile: personInfo?.mobile || '-',
+          personHouseNo: personInfo?.houseNo || '-', personType: personInfo?.personTypeName || '-',
+          recorded
+        }
+      } else {
+        result.value = { matched: false }
       }
     } else {
-      result.value = { matched: false }
+      const plateData = await recognizePlate(url)
+      if (plateData && plateData.success) {
+        if (plateData.matched) {
+          const personInfo = await fetchPersonInfo(plateData.personId)
+          let recorded = false
+          if (selectedCameraId.value && cameraDirection.value) {
+            recorded = await recordAccess(personInfo, url)
+          }
+          result.value = {
+            matched: true, plateNumber: plateData.plateNumber, color: plateData.color,
+            hasParkingSpace: plateData.hasParkingSpace,
+            personName: personInfo?.userName || '-', personMobile: personInfo?.mobile || '-',
+            personHouseNo: personInfo?.houseNo || '-',
+            recorded
+          }
+        } else {
+          result.value = { matched: false, plateNumber: plateData.plateNumber, color: plateData.color }
+        }
+      } else {
+        result.value = { matched: false, plateNumber: null }
+      }
     }
   } catch (err) {
     console.error('识别失败:', err)
@@ -237,15 +304,32 @@ const handleManualSearch = async () => {
   if (!manualImage.value) return
   manualSearching.value = true
   try {
-    const data = await searchFace(manualImage.value)
-    if (data && data.matched) {
-      const personInfo = await fetchPersonInfo(data.personId)
-      if (selectedCameraId.value && cameraDirection.value) {
-        await recordAccess(personInfo, manualImage.value)
+    if (recognitionType.value === 'face') {
+      const data = await searchFace(manualImage.value)
+      if (data && data.matched) {
+        const personInfo = await fetchPersonInfo(data.personId)
+        if (selectedCameraId.value && cameraDirection.value) {
+          await recordAccess(personInfo, manualImage.value)
+        }
+        manualResult.value = { matched: true, personName: personInfo?.userName || '-', score: data.score }
+      } else {
+        manualResult.value = { matched: false }
       }
-      manualResult.value = { matched: true, personName: personInfo?.userName || '-', score: data.score }
     } else {
-      manualResult.value = { matched: false }
+      const plateData = await recognizePlate(manualImage.value)
+      if (plateData && plateData.success) {
+        if (plateData.matched) {
+          const personInfo = await fetchPersonInfo(plateData.personId)
+          if (selectedCameraId.value && cameraDirection.value) {
+            await recordAccess(personInfo, manualImage.value)
+          }
+          manualResult.value = { matched: true, plateNumber: plateData.plateNumber, personName: personInfo?.userName || '-' }
+        } else {
+          manualResult.value = { matched: false, plateNumber: plateData.plateNumber }
+        }
+      } else {
+        manualResult.value = { matched: false, plateNumber: null }
+      }
     }
   } finally { manualSearching.value = false }
 }
@@ -263,6 +347,11 @@ const searchFace = async (imageUrl) => {
   catch { ElMessage.error('人脸搜索失败'); return null }
 }
 
+const recognizePlate = async (imageUrl) => {
+  try { const { data } = await request.post('/plate/recognize', null, { params: { imageUrl } }); return data }
+  catch { ElMessage.error('车牌识别失败'); return null }
+}
+
 const fetchPersonInfo = async (personId) => {
   try {
     const { data } = await request.get(`/property/person/${personId}`)
@@ -273,7 +362,8 @@ const fetchPersonInfo = async (personId) => {
 
 const recordAccess = async (personInfo, photoUrl) => {
   try {
-    await request.post('/face/record', null, {
+    const url = recognitionType.value === 'face' ? '/face/record' : '/plate/record'
+    await request.post(url, null, {
       params: {
         personName: personInfo?.userName || '',
         communityId: personInfo?.communityId || 0,

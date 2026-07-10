@@ -2,7 +2,13 @@
   <div class="page-container">
     <div class="page-header">
       <h2>菜单管理</h2>
-      <el-button type="primary" icon="Plus" @click="handleAdd(0)">新增菜单</el-button>
+    </div>
+
+    <div class="search-toolbar">
+      <div class="toolbar-left"></div>
+      <div class="toolbar-right">
+        <el-button type="primary" icon="Plus" @click="handleAdd(0)">新增菜单</el-button>
+      </div>
     </div>
 
     <el-table :data="menuTree" v-loading="loading" border stripe row-key="menuId" default-expand-all>

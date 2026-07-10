@@ -41,10 +41,13 @@ public class FaceRecognitionService {
     public String registerFace(String imageUrl, String personId) {
         try {
             HashMap<String, String> options = new HashMap<>();
-            options.put("quality_control", "NORMAL");
-            options.put("liveness_control", "LOW");
+            options.put("quality_control", "LOW");
+            options.put("liveness_control", "NONE");
 
             String image = resolveImage(imageUrl);
+            if (image.isEmpty()) {
+                throw new RuntimeException("无法下载人脸图片，请检查OSS配置或稍后重试");
+            }
             String imageType = image.startsWith("http") ? "URL" : "BASE64";
 
             JSONObject result = client.addUser(image, imageType, groupId, personId, options);
@@ -57,11 +60,15 @@ public class FaceRecognitionService {
                 log.info("百度人脸注册成功: personId={}, faceToken={}", personId, faceToken);
                 return faceToken;
             }
-            log.error("百度人脸注册失败: personId={}, error={}", personId, result.optString("error_msg"));
+            String errMsg = result.optString("error_msg", "未知错误");
+            log.error("百度人脸注册失败: personId={}, error={}", personId, errMsg);
+            throw new RuntimeException("人脸注册失败: " + errMsg);
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             log.error("百度人脸注册异常: personId={}, error={}", personId, e.getMessage());
+            throw new RuntimeException("人脸注册服务异常: " + e.getMessage());
         }
-        return null;
     }
 
     /**
@@ -70,11 +77,14 @@ public class FaceRecognitionService {
     public Map<String, Object> searchFace(String imageUrl) {
         try {
             HashMap<String, Object> options = new HashMap<>();
-            options.put("quality_control", "NORMAL");
-            options.put("liveness_control", "LOW");
+            options.put("quality_control", "LOW");
+            options.put("liveness_control", "NONE");
             options.put("max_user_num", 1);
 
             String image = resolveImage(imageUrl);
+            if (image.isEmpty()) {
+                throw new RuntimeException("无法下载人脸图片，请检查OSS配置");
+            }
             String imageType = image.startsWith("http") ? "URL" : "BASE64";
 
             JSONObject result = client.search(image, imageType, groupId, options);
@@ -96,15 +106,23 @@ public class FaceRecognitionService {
                         log.info("百度人脸搜索低置信度: score={}", score);
                     }
                 }
+                // error_code=0 但没有匹配用户 → 正常未找到
+                return null;
             } else if ("222207".equals(errorCode)) {
                 log.info("百度人脸搜索未找到匹配");
+                return null;
             } else {
-                log.error("百度人脸搜索失败: error={}", result.optString("error_msg"));
+                // 其他错误码：图片质量问题等，抛异常阻断
+                String errMsg = result.optString("error_msg", "未知错误");
+                log.error("百度人脸搜索失败: error={}", errMsg);
+                throw new RuntimeException("人脸搜索失败: " + errMsg);
             }
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             log.error("百度人脸搜索异常: error={}", e.getMessage());
+            throw new RuntimeException("人脸搜索服务异常: " + e.getMessage());
         }
-        return null;
     }
 
     /**

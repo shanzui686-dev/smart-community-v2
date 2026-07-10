@@ -25,7 +25,8 @@
 import { markRaw } from 'vue'
 import {
   Setting, OfficeBuilding, Key, HomeFilled, User, Avatar, Menu,
-  Document, VideoCamera, List, UserFilled, View, DataAnalysis
+  Document, VideoCamera, List, UserFilled, View, DataAnalysis, MapLocation, Bicycle, Bell,
+  Money, DataLine
 } from '@element-plus/icons-vue'
 
 defineProps({
@@ -46,6 +47,11 @@ const iconMap = {
   List: markRaw(List),
   UserFilled: markRaw(UserFilled),
   View: markRaw(View),
-  DataAnalysis: markRaw(DataAnalysis)
+  DataAnalysis: markRaw(DataAnalysis),
+  MapLocation: markRaw(MapLocation),
+  Bicycle: markRaw(Bicycle),
+  Bell: markRaw(Bell),
+  Money: markRaw(Money),
+  DataLine: markRaw(DataLine)
 }
 </script>

@@ -219,7 +219,8 @@ const handleChangePwd = async () => {
 
   .sidebar {
     background-color: #304156;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 
     .logo {
       height: 60px;

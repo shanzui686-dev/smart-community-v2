@@ -2,22 +2,26 @@
   <div class="page-container">
     <div class="page-header">
       <h2>访客登记</h2>
-      <el-button type="primary" icon="Plus" @click="handleAdd">访客登记</el-button>
     </div>
 
     <div class="search-toolbar">
-      <el-input v-model="searchForm.name" placeholder="访客姓名" clearable style="width:160px" @change="handleSearch" />
-      <el-select v-model="searchForm.communityId" placeholder="访问小区" clearable style="width:160px" @change="handleSearch">
-        <el-option v-for="c in communityList" :key="c.communityId" :label="c.name" :value="c.communityId" />
-      </el-select>
-      <el-select v-model="searchForm.status" placeholder="状态" clearable style="width:130px" @change="handleSearch">
-        <el-option label="已预约" :value="1" />
-        <el-option label="已到访" :value="2" />
-        <el-option label="已离开" :value="3" />
-        <el-option label="已取消" :value="4" />
-      </el-select>
-      <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
-      <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      <div class="toolbar-left">
+        <el-input v-model="searchForm.name" placeholder="访客姓名" clearable style="width:160px" @change="handleSearch" />
+        <el-select v-model="searchForm.communityId" placeholder="访问小区" clearable style="width:160px" @change="handleSearch">
+          <el-option v-for="c in communityList" :key="c.communityId" :label="c.name" :value="c.communityId" />
+        </el-select>
+        <el-select v-model="searchForm.status" placeholder="状态" clearable style="width:130px" @change="handleSearch">
+          <el-option label="已预约" :value="1" />
+          <el-option label="已到访" :value="2" />
+          <el-option label="已离开" :value="3" />
+          <el-option label="已取消" :value="4" />
+        </el-select>
+        <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
+        <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      </div>
+      <div class="toolbar-right">
+        <el-button type="primary" icon="Plus" @click="handleAdd">访客登记</el-button>
+      </div>
     </div>
 
     <el-table :data="tableData" v-loading="loading" border stripe>

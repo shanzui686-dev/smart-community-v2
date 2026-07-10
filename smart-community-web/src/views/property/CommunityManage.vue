@@ -2,13 +2,17 @@
   <div class="page-container">
     <div class="page-header">
       <h2>小区管理</h2>
-      <el-button type="primary" icon="Plus" @click="handleAdd">新增小区</el-button>
     </div>
 
     <div class="search-toolbar">
-      <el-input v-model="searchForm.keyword" placeholder="小区名称/地址" clearable style="width:220px" @change="handleSearch" />
-      <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
+      <div class="toolbar-left">
+        <el-input v-model="searchForm.keyword" placeholder="小区名称/地址" clearable style="width:220px" @change="handleSearch" />
+        <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
       <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      </div>
+      <div class="toolbar-right">
+        <el-button type="primary" icon="Plus" @click="handleAdd">新增小区</el-button>
+      </div>
     </div>
 
     <el-table :data="tableData" v-loading="loading" border stripe>
@@ -25,7 +29,7 @@
       <el-table-column prop="totalHouse" label="房屋数" width="80" />
       <el-table-column prop="status" label="状态" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '启用' : '停用' }}</el-tag>
+          <el-switch v-model="row.status" :active-value="1" :inactive-value="0" @change="(val) => handleStatusChange(row, val)" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="160" fixed="right">
@@ -324,6 +328,16 @@ const resetForm = () => {
     mapInstance.destroy()
     mapInstance = null
     mapMarker = null
+  }
+}
+
+const handleStatusChange = async (row, val) => {
+  try {
+    await updateCommunity({ communityId: row.communityId, status: val })
+    ElMessage.success(val === 1 ? '已启用' : '已停用')
+    loadData()
+  } catch {
+    ElMessage.error('操作失败')
   }
 }
 

@@ -2,7 +2,23 @@
   <div class="page-container">
     <div class="page-header">
       <h2>居民管理</h2>
-      <div style="display:flex;gap:8px">
+    </div>
+
+    <div class="search-toolbar">
+      <div class="toolbar-left">
+        <el-input v-model="searchForm.keyword" placeholder="姓名/手机号/门牌号" clearable style="width:220px" @change="handleSearch" />
+        <el-select v-model="searchForm.communityId" placeholder="选择小区" clearable style="width:160px" @change="handleSearch">
+          <el-option v-for="c in communityList" :key="c.communityId" :label="c.name" :value="c.communityId" />
+        </el-select>
+        <el-select v-model="searchForm.personType" placeholder="人员类型" clearable style="width:130px" @change="handleSearch">
+          <el-option label="业主" :value="1" />
+          <el-option label="租户" :value="2" />
+          <el-option label="家属" :value="3" />
+        </el-select>
+        <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
+        <el-button icon="Refresh" @click="handleReset">重置</el-button>
+      </div>
+      <div class="toolbar-right">
         <el-button type="primary" icon="Plus" @click="handleAdd">新增居民</el-button>
         <el-button type="primary" icon="Upload" @click="triggerImport">批量导入</el-button>
         <el-button type="success" icon="Download" @click="handleExportSelected" :disabled="selectedRows.length === 0">
@@ -10,20 +26,6 @@
         </el-button>
         <el-button type="warning" icon="Download" @click="handleExportAll">批量导出</el-button>
       </div>
-    </div>
-
-    <div class="search-toolbar">
-      <el-input v-model="searchForm.keyword" placeholder="姓名/手机号/门牌号" clearable style="width:220px" @change="handleSearch" />
-      <el-select v-model="searchForm.communityId" placeholder="选择小区" clearable style="width:160px" @change="handleSearch">
-        <el-option v-for="c in communityList" :key="c.communityId" :label="c.name" :value="c.communityId" />
-      </el-select>
-      <el-select v-model="searchForm.personType" placeholder="人员类型" clearable style="width:130px" @change="handleSearch">
-        <el-option label="业主" :value="1" />
-        <el-option label="租户" :value="2" />
-        <el-option label="家属" :value="3" />
-      </el-select>
-      <el-button type="primary" icon="Search" @click="handleSearch">搜索</el-button>
-      <el-button icon="Refresh" @click="handleReset">重置</el-button>
     </div>
 
     <el-table :data="tableData" v-loading="loading" border stripe @selection-change="handleSelectionChange">
@@ -51,7 +53,7 @@
       </el-table-column>
       <el-table-column prop="state" label="在住状态" width="90">
         <template #default="{ row }">
-          <el-tag :type="row.state===1?'success':'danger'">{{ row.state===1?'在住':'迁出' }}</el-tag>
+          <el-switch v-model="row.state" :active-value="1" :inactive-value="0" @change="(val) => handleStateChange(row, val)" />
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
@@ -157,7 +159,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getPersons, addPerson, updatePerson, deletePerson, importPersons } from '@/api/property'
+import { getPersons, addPerson, updatePerson, deletePerson, importPersons, faceSearch, faceCompare } from '@/api/property'
 import { getAllCommunities } from '@/api/property'
 import { uploadFile } from '@/api/system'
 import { getSignedUrl } from '@/utils/oss'
@@ -307,11 +309,31 @@ const resetForm = () => {
   })
 }
 
+const handleStateChange = async (row, val) => {
+  try {
+    await updatePerson({ personId: row.personId, state: val })
+    ElMessage.success(val === 1 ? '已在住' : '已迁出')
+    loadData()
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
+
 const handleSubmit = async () => {
-  await formRef.value.validate()
-  if (isEdit.value) { await updatePerson(form) } else { await addPerson(form) }
-  ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
-  dialogVisible.value = false; loadData()
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+  try {
+    if (isEdit.value) { await updatePerson(form) } else { await addPerson(form) }
+    ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
+    dialogVisible.value = false
+    loadData()
+  } catch (e) {
+    // 后端人脸查重失败等错误，axios 拦截器已显示 ElMessage.error
+    // 此处不关闭弹窗，让用户修改后重新提交
+  }
 }
 
 // ==================== 人脸照片上传 ====================
@@ -333,13 +355,76 @@ const uploadFaceFile = async (file) => {
   formData.append('file', file)
   formData.append('dir', 'face')
   formData.append('bucket', 'face')
+
+  // 上传文件到 OSS
+  let uploadedUrl
   try {
-    const { data } = await uploadFile(formData)
-    form.faceUrl = data
-    form._signedFaceUrl = await getSignedUrl(data)
+    ElMessage.info('正在上传照片...')
+    const uploadRes = await uploadFile(formData)
+    uploadedUrl = uploadRes.data
+  } catch {
+    ElMessage.error('文件上传失败，请检查网络后重试')
+    return
+  }
+
+  // ========== 第一步：1:N 人脸搜索查重（编辑和新增都需要） ==========
+  ElMessage.info('正在与已有居民进行人脸查重...')
+  try {
+    const searchRes = await faceSearch(uploadedUrl)
+    const result = searchRes.data
+    if (result && result.matched && (Number(result.score) || 0) > 90) {
+      // matchedId 来自百度 AI 是 String，form.personId 可能是 Number，统一转 String 比较
+      const matchedId = String(result.personId)
+      const currentId = String(form.personId)
+      // 编辑模式：匹配到的是本人 → 允许（同一人换照片）
+      if (isEdit.value && matchedId === currentId) {
+        // 放行，继续执行后续逻辑
+      } else {
+        const score = Number(result.score) || 0
+        ElMessage.warning(
+          `该人脸已存在（匹配居民 ID: ${matchedId}，置信度 ${score.toFixed(2)}%），请勿重复录入`
+        )
+        return
+      }
+    }
+  } catch (e) {
+    console.error('人脸查重失败:', e)
+    // 搜索异常（图片质量等问题），阻断上传，注册时也会失败
+    ElMessage.error(e.message || '人脸查重服务异常，请重试')
+    return
+  }
+
+  // ========== 第二步：编辑模式下额外做 1:1 本人确认 ==========
+  if (isEdit.value) {
+    const oldFaceUrl = form._signedFaceUrl || form.faceUrl
+    if (oldFaceUrl) {
+      ElMessage.info('正在与原有照片进行本人确认...')
+      try {
+        const compareRes = await faceCompare(uploadedUrl, oldFaceUrl)
+        const cmp = compareRes.data
+        const score = cmp ? (Number(cmp.score) || 0) : 0
+        if (!cmp || !cmp.passed || score < 95) {
+          ElMessage.warning(`本人确认未通过（置信度 ${score.toFixed(2)}%，需要 > 95%），请重新上传本人照片`)
+          return
+        }
+      } catch (e) {
+        console.error('人脸比对失败:', e)
+        ElMessage.warning('人脸比对服务异常，请重试')
+        return
+      }
+    }
+  }
+
+  // ========== 全部校验通过，接受照片 ==========
+  try {
+    if (isEdit.value) {
+      form._oldFaceUrl = form._signedFaceUrl || form.faceUrl
+    }
+    form.faceUrl = uploadedUrl
+    form._signedFaceUrl = await getSignedUrl(uploadedUrl)
     ElMessage.success('人脸照片上传成功')
   } catch {
-    ElMessage.error('人脸照片上传失败')
+    ElMessage.error('照片处理失败，请重试')
   }
 }
 
@@ -348,7 +433,7 @@ const uploadFaceFile = async (file) => {
 const openCamera = async () => {
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480, facingMode: 'user' }
+      video: { width: 1280, height: 720, facingMode: 'user' }
     })
     cameraVisible.value = true
     // 等 DOM 更新后绑定视频流

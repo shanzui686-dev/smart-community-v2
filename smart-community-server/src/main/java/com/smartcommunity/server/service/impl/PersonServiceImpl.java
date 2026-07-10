@@ -24,6 +24,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class PersonServiceImpl implements PersonService {
@@ -32,6 +33,9 @@ public class PersonServiceImpl implements PersonService {
     private final CommunityMapper communityMapper;
     private final OssService ossService;
     private final FaceRecognitionService faceRecognitionService;
+
+    /** 人脸操作锁，防止并发注册同一张人脸（百度 AI 注册非即时生效） */
+    private final Object faceLock = new Object();
 
     public PersonServiceImpl(PersonMapper personMapper, CommunityMapper communityMapper,
                              OssService ossService, FaceRecognitionService faceRecognitionService) {
@@ -79,28 +83,93 @@ public class PersonServiceImpl implements PersonService {
     @Transactional
     public void add(Person person) {
         personMapper.insert(person);
-        // 如果新增时已有人脸照片，注册到人脸识别服务
+
         if (person.getFaceUrl() != null && !person.getFaceUrl().isBlank()) {
-            String faceId = faceRecognitionService.registerFace(person.getFaceUrl(), String.valueOf(person.getPersonId()));
-            if (faceId != null) {
+            synchronized (faceLock) {
+                // 1. 注册前查重（同时校验DB，过滤已删除居民的幽灵数据）
+                Map<String, Object> before = faceRecognitionService.searchFace(person.getFaceUrl());
+                if (before != null) {
+                    String foundId = String.valueOf(before.get("personId"));
+                    double score = getScore(before);
+                    if (score > 90 && isFaceStillValid(foundId)) {
+                        throw new RuntimeException("该人脸已存在（置信度 " + String.format("%.2f", score) + "%），请勿重复录入");
+                    }
+                }
+                // 2. 注册（失败会抛异常回滚事务）
+                String faceId = faceRecognitionService.registerFace(person.getFaceUrl(), String.valueOf(person.getPersonId()));
                 person.setFaceId(faceId);
                 personMapper.updateById(person);
+                // 3. 注册后自查
+                Map<String, Object> after = faceRecognitionService.searchFace(person.getFaceUrl());
+                if (after != null) {
+                    String foundId = String.valueOf(after.get("personId"));
+                    String myId = String.valueOf(person.getPersonId());
+                    if (!foundId.equals(myId) && getScore(after) > 90 && isFaceStillValid(foundId)) {
+                        if (faceId != null) {
+                            faceRecognitionService.deleteFace(faceId, String.valueOf(person.getPersonId()));
+                        }
+                        throw new RuntimeException("该人脸已被其他居民使用，请勿重复录入");
+                    }
+                }
             }
+        }
+    }
+
+    private double getScore(Map<String, Object> result) {
+        Object s = result.get("score");
+        return s instanceof Number ? ((Number) s).doubleValue() : 0;
+    }
+
+    /** 校验百度 AI 搜到的人脸在数据库中是否仍然有效（未被删除/未清空人脸） */
+    private boolean isFaceStillValid(String personIdFromBaidu) {
+        try {
+            Long id = Long.valueOf(personIdFromBaidu);
+            Person p = personMapper.selectById(id);
+            return p != null
+                && p.getFaceUrl() != null && !p.getFaceUrl().isBlank()
+                && p.getFaceId() != null && !p.getFaceId().isBlank();
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 
     @Override
     @Transactional
     public void update(Person person) {
-        // 如果更新了人脸照片，重新注册到人脸库
         if (person.getFaceUrl() != null && !person.getFaceUrl().isBlank()) {
             Person old = personMapper.selectById(person.getPersonId());
-            // 人脸照片变更了，先删旧的人脸再注册新的
-            if (old != null && old.getFaceId() != null && !person.getFaceUrl().equals(old.getFaceUrl())) {
-                faceRecognitionService.deleteFace(old.getFaceId(), String.valueOf(person.getPersonId()));
+            boolean faceChanged = (old == null || !person.getFaceUrl().equals(old.getFaceUrl()));
+
+            if (faceChanged) {
+                synchronized (faceLock) {
+                    String myId = String.valueOf(person.getPersonId());
+                    // 1. 注册前查重（校验DB，过滤幽灵数据）
+                    Map<String, Object> before = faceRecognitionService.searchFace(person.getFaceUrl());
+                    if (before != null) {
+                        String foundId = String.valueOf(before.get("personId"));
+                        if (!foundId.equals(myId) && getScore(before) > 90 && isFaceStillValid(foundId)) {
+                            throw new RuntimeException("该人脸已被其他居民使用（居民 ID: " + foundId
+                                    + "，置信度 " + String.format("%.2f", getScore(before)) + "%），请勿重复录入");
+                        }
+                    }
+                    // 2. 删旧
+                    if (old != null && old.getFaceId() != null) {
+                        faceRecognitionService.deleteFace(old.getFaceId(), myId);
+                    }
+                    // 3. 注册新（失败会抛异常回滚）
+                    String faceId = faceRecognitionService.registerFace(person.getFaceUrl(), myId);
+                    person.setFaceId(faceId);
+                    // 4. 注册后自查
+                    Map<String, Object> after = faceRecognitionService.searchFace(person.getFaceUrl());
+                    if (after != null && faceId != null) {
+                        String foundId = String.valueOf(after.get("personId"));
+                        if (!foundId.equals(myId) && getScore(after) > 90 && isFaceStillValid(foundId)) {
+                            faceRecognitionService.deleteFace(faceId, myId);
+                            throw new RuntimeException("该人脸已被其他居民使用，请勿重复录入");
+                        }
+                    }
+                }
             }
-            String faceId = faceRecognitionService.registerFace(person.getFaceUrl(), String.valueOf(person.getPersonId()));
-            person.setFaceId(faceId);
         }
         personMapper.updateById(person);
     }

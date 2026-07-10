@@ -194,6 +194,28 @@ CREATE TABLE camera (
     FOREIGN KEY (community_id) REFERENCES community(community_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='摄像头表';
 
+-- 车辆表
+CREATE TABLE vehicle (
+    vehicle_id      BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '车辆ID',
+    person_id       BIGINT          NOT NULL                 COMMENT '车主ID',
+    community_id    BIGINT          NOT NULL                 COMMENT '所属小区ID',
+    plate_number    VARCHAR(32)     NOT NULL                 COMMENT '车牌号',
+    vehicle_type    TINYINT         NOT NULL DEFAULT 4       COMMENT '车辆类型：1-摩托车，2-三轮车，3-电瓶车，4-家用车',
+    has_parking_space TINYINT       NOT NULL DEFAULT 0       COMMENT '是否有车位：0-无，1-有',
+    remark          VARCHAR(512)    DEFAULT NULL             COMMENT '备注',
+    deleted         TINYINT         NOT NULL DEFAULT 0       COMMENT '逻辑删除：0-未删除，1-已删除',
+    create_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (vehicle_id),
+    UNIQUE KEY uk_plate_number (plate_number),
+    KEY idx_person_id (person_id),
+    KEY idx_community_id (community_id),
+    KEY idx_vehicle_type (vehicle_type),
+    KEY idx_has_parking_space (has_parking_space),
+    FOREIGN KEY (person_id) REFERENCES person(person_id) ON DELETE RESTRICT,
+    FOREIGN KEY (community_id) REFERENCES community(community_id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='车辆表';
+
 -- =============================================
 -- 3. 门禁管理模块
 -- =============================================
@@ -284,6 +306,8 @@ INSERT INTO menu (menu_id, menu_name, parent_id, path, component, icon, sort, ty
 (21, '小区管理', 2, '/property/community', 'property/CommunityManage', 'HomeFilled', 1, 2, 'property:community:list', 1, 1),
 (22, '居民管理', 2, '/property/person', 'property/PersonManage', 'Avatar', 2, 2, 'property:person:list', 1, 1),
 (23, '摄像头管理', 2, '/property/camera', 'property/CameraManage', 'VideoCamera', 3, 2, 'property:camera:list', 1, 1),
+(24, '地图管理', 2, '/property/map', 'property/MapManage', 'MapLocation', 4, 2, 'property:map:view', 1, 1),
+(25, '车辆管理', 2, '/property/vehicle', 'property/VehicleManage', 'Bicycle', 5, 2, 'property:vehicle:list', 1, 1),
 -- 门禁管理子菜单
 (31, '出入记录', 3, '/access/record', 'access/RecordManage', 'List', 1, 2, 'access:record:list', 1, 1),
 (32, '访客登记', 3, '/access/visitor', 'access/VisitorManage', 'UserFilled', 2, 2, 'access:visitor:list', 1, 1),
@@ -295,7 +319,7 @@ SELECT 1, menu_id FROM menu;
 
 -- 物业管理员权限（物业管理 + 数据统计 + 门禁查看）
 INSERT INTO role_menu (role_id, menu_id) VALUES
-(2, 2), (2, 21), (2, 22), (2, 23),
+(2, 2), (2, 21), (2, 22), (2, 23), (2, 24), (2, 25),
 (2, 3), (2, 31), (2, 32), (2, 33),
 (2, 4);
 
